@@ -1,9 +1,9 @@
 const CACHE = 'barkod-v2';
 const ASSETS = [
-  '/barkod-sayici.html',
-  '/manifest.json',
-  '/icon-192.png',
-  '/icon-512.png'
+  '/barkod-sayici/barkod-sayici.html',
+  '/barkod-sayici/manifest.json',
+  '/barkod-sayici/icon-192.png',
+  '/barkod-sayici/icon-512.png'
 ];
 
 self.addEventListener('install', e => {

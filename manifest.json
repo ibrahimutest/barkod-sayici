@@ -2,7 +2,7 @@
   "name": "Barkod Sayıcı",
   "short_name": "Barkod",
   "description": "Stok sayımı için barkod tarayıcı",
-  "start_url": "/barkod-sayici.html",
+  "start_url": "/barkod-sayici/barkod-sayici.html",
   "display": "standalone",
   "background_color": "#1a2744",
   "theme_color": "#1a2744",
