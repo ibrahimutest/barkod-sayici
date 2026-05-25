@@ -1,0 +1,1228 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Barkod Sayıcı</title>
+  <!-- PWA -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#1a2744">
+  <!-- iOS -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Barkod Sayıcı">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <!-- Supabase -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.3/dist/umd/supabase.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --navy: #1a2744;
+      --navy-dark: #111b33;
+      --green: #22c55e;
+      --green-dark: #16a34a;
+      --red: #ef4444;
+      --red-dark: #dc2626;
+      --gray-50: #f9fafb;
+      --gray-100: #f3f4f6;
+      --gray-200: #e5e7eb;
+      --gray-400: #9ca3af;
+      --gray-600: #4b5563;
+      --gray-900: #111827;
+      --white: #ffffff;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--gray-100);
+      color: var(--gray-900);
+      min-height: 100vh;
+    }
+
+    header {
+      background: var(--navy);
+      color: var(--white);
+      padding: 12px 16px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    header h1 {
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: 0.3px;
+      flex: 1;
+    }
+
+    .session-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    .session-date {
+      font-size: 12px;
+      color: #94a3b8;
+      font-weight: 500;
+    }
+
+    .btn-history {
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.2);
+      color: var(--white);
+      font-size: 12px;
+      font-weight: 600;
+      padding: 5px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.15s;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .btn-history:hover { background: rgba(255,255,255,0.2); }
+
+    /* Dropdown overlay */
+    #history-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 200;
+    }
+
+    #history-dropdown {
+      display: none;
+      position: absolute;
+      top: calc(100% + 4px);
+      right: 0;
+      background: var(--white);
+      border-radius: 10px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+      min-width: 220px;
+      z-index: 201;
+      overflow: hidden;
+    }
+
+    .history-dropdown-wrap {
+      position: relative;
+    }
+
+    #history-dropdown.open { display: block; }
+    #history-overlay.open { display: block; }
+
+    .history-dropdown-title {
+      padding: 10px 14px 6px;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--gray-400);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .history-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px;
+      font-size: 14px;
+      cursor: pointer;
+      transition: background 0.1s;
+      border-top: 1px solid var(--gray-100);
+    }
+
+    .history-item:hover { background: var(--gray-50); }
+    .history-item.active { background: #eff6ff; color: #1d4ed8; font-weight: 600; }
+
+    .history-item .hi-label { font-weight: 600; }
+    .history-item .hi-meta { font-size: 11px; color: var(--gray-400); }
+
+    .history-empty {
+      padding: 16px 14px;
+      font-size: 13px;
+      color: var(--gray-400);
+      text-align: center;
+    }
+
+    /* Loading overlay */
+    #loading-overlay {
+      display: flex;
+      position: fixed;
+      inset: 0;
+      background: rgba(17,27,51,0.7);
+      z-index: 999;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 12px;
+      color: var(--white);
+      font-size: 15px;
+      font-weight: 600;
+    }
+
+    #loading-overlay.hidden { display: none; }
+
+    .spinner {
+      width: 36px;
+      height: 36px;
+      border: 3px solid rgba(255,255,255,0.2);
+      border-top-color: var(--white);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .summary-bar {
+      background: var(--navy-dark);
+      color: var(--white);
+      display: flex;
+      justify-content: space-around;
+      padding: 10px 16px;
+    }
+
+    .summary-item { text-align: center; }
+
+    .summary-item .label {
+      font-size: 11px;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .summary-item .value {
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--green);
+      line-height: 1.2;
+    }
+
+    main {
+      padding: 12px;
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    .card {
+      background: var(--white);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 12px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    }
+
+    .card-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--gray-600);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 12px;
+    }
+
+    #https-warning {
+      background: #fef3c7;
+      border: 1px solid #f59e0b;
+      border-radius: 8px;
+      padding: 12px 14px;
+      font-size: 13px;
+      color: #92400e;
+      margin-bottom: 12px;
+      display: none;
+    }
+
+    #reader {
+      width: 100%;
+      border-radius: 8px;
+      overflow: hidden;
+      margin-bottom: 10px;
+    }
+
+    #reader img { display: none !important; }
+
+    #last-scan {
+      text-align: center;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--gray-600);
+      padding: 4px 8px;
+      min-height: 24px;
+      margin-bottom: 4px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 12px 18px;
+      border-radius: 8px;
+      border: none;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      min-height: 48px;
+      transition: background 0.15s, transform 0.1s;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .btn:active { transform: scale(0.97); }
+
+    .btn-green { background: var(--green); color: var(--white); }
+    .btn-green:hover { background: var(--green-dark); }
+
+    .btn-red { background: var(--red); color: var(--white); }
+    .btn-red:hover { background: var(--red-dark); }
+
+    .btn-outline {
+      background: transparent;
+      color: var(--navy);
+      border: 2px solid var(--navy);
+    }
+    .btn-outline:hover { background: var(--gray-100); }
+
+    .btn-sm {
+      min-height: 36px;
+      padding: 6px 10px;
+      font-size: 14px;
+      border-radius: 6px;
+    }
+
+    .btn-icon {
+      min-height: 36px;
+      min-width: 36px;
+      padding: 6px;
+      border-radius: 6px;
+      font-size: 16px;
+      font-weight: 700;
+    }
+
+    .camera-controls {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .camera-controls .btn { flex: 1; min-width: 120px; }
+
+    .usb-info {
+      font-size: 12px;
+      color: var(--gray-600);
+      margin-top: 6px;
+    }
+
+    #manual-input-wrap {
+      display: flex;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    #manual-input {
+      flex: 1;
+      padding: 12px 14px;
+      border: 2px solid var(--gray-200);
+      border-radius: 8px;
+      font-size: 16px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    #manual-input:focus { border-color: var(--navy); }
+
+    #flash {
+      position: fixed;
+      inset: 0;
+      background: rgba(34, 197, 94, 0.25);
+      pointer-events: none;
+      opacity: 0;
+      z-index: 998;
+      transition: opacity 0.15s;
+    }
+
+    #flash.show { opacity: 1; }
+
+    .list-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .list-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+    #empty-state {
+      text-align: center;
+      color: var(--gray-400);
+      padding: 32px 16px;
+      font-size: 14px;
+    }
+
+    #empty-state svg {
+      width: 48px;
+      height: 48px;
+      margin-bottom: 8px;
+      opacity: 0.4;
+      display: block;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    table { width: 100%; border-collapse: collapse; }
+
+    thead th {
+      background: var(--gray-50);
+      padding: 10px 8px;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--gray-600);
+      text-align: left;
+      border-bottom: 1px solid var(--gray-200);
+    }
+
+    tbody tr {
+      border-bottom: 1px solid var(--gray-100);
+      transition: background 0.1s;
+    }
+
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: var(--gray-50); }
+    tbody tr.flash-row { background: #dcfce7; }
+
+    td {
+      padding: 10px 8px;
+      font-size: 14px;
+      vertical-align: middle;
+    }
+
+    td.barcode-cell {
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--navy);
+      max-width: 140px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    td.count-cell { text-align: center; min-width: 80px; }
+
+    .count-controls {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+    }
+
+    .count-value {
+      font-size: 16px;
+      font-weight: 700;
+      min-width: 110px;
+      text-align: center;
+      border: none;
+      background: transparent;
+      cursor: text;
+      padding: 2px 4px;
+      border-radius: 4px;
+      width: 110px;
+    }
+    .count-value:focus {
+      outline: 2px solid var(--navy);
+      background: var(--white);
+    }
+
+    td.actions-cell { text-align: center; min-width: 48px; }
+
+    .btn-delete {
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      color: var(--gray-400);
+      font-size: 18px;
+      padding: 4px 8px;
+      border-radius: 4px;
+      min-height: 36px;
+      transition: color 0.15s, background 0.15s;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .btn-delete:hover { color: var(--red); background: #fee2e2; }
+
+    #toast {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%) translateY(80px);
+      background: var(--navy-dark);
+      color: var(--white);
+      padding: 10px 20px;
+      border-radius: 24px;
+      font-size: 14px;
+      font-weight: 500;
+      z-index: 9999;
+      transition: transform 0.3s ease;
+      white-space: nowrap;
+      pointer-events: none;
+    }
+
+    #toast.show { transform: translateX(-50%) translateY(0); }
+
+    @media (min-width: 480px) {
+      .camera-controls .btn { flex: unset; }
+    }
+  </style>
+</head>
+<body>
+
+<div id="flash"></div>
+<div id="toast"></div>
+
+<!-- Loading overlay -->
+<div id="loading-overlay" class="hidden">
+  <div class="spinner"></div>
+  <span>Yükleniyor...</span>
+</div>
+
+<header>
+  <h1>Barkod Sayıcı</h1>
+  <div class="session-info">
+    <span class="session-date" id="session-date-label"></span>
+    <div class="history-dropdown-wrap">
+      <button class="btn-history" id="btn-history">Geçmiş</button>
+      <div id="history-dropdown">
+        <div class="history-dropdown-title">Son 7 Gün</div>
+        <div id="history-list"></div>
+      </div>
+    </div>
+  </div>
+</header>
+<div id="history-overlay"></div>
+
+<div class="summary-bar">
+  <div class="summary-item">
+    <div class="label">Farklı Ürün</div>
+    <div class="value" id="total-products">0</div>
+  </div>
+  <div class="summary-item">
+    <div class="label">Toplam Adet</div>
+    <div class="value" id="total-qty">0</div>
+  </div>
+</div>
+
+<main>
+
+  <div id="https-warning">
+    Kamerayı kullanmak için HTTPS veya localhost gereklidir. USB barkod okuyucu ve manuel giriş çalışmaya devam eder.
+  </div>
+
+  <div class="card">
+    <div class="card-title">Kamera ile Tara</div>
+
+    <div id="last-scan"></div>
+    <div id="reader"></div>
+
+    <div class="camera-controls">
+      <button class="btn btn-green" id="btn-start-camera">Kamerayı Başlat</button>
+      <button class="btn btn-outline" id="btn-stop-camera" style="display:none">Durdur</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">USB Okuyucu / Manuel Giriş</div>
+    <p class="usb-info">USB barkod okuyucu otomatik çalışır. Manuel giriş için alana yazın veya okuyucuyu bu alana yönlendirin.</p>
+    <div id="manual-input-wrap">
+      <input type="text"
+             id="manual-input"
+             inputmode="numeric"
+             placeholder="Barkod girin..."
+             autocomplete="off"
+             autocorrect="off"
+             spellcheck="false" />
+      <button class="btn btn-green btn-sm" id="btn-add-manual">Ekle</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="list-header">
+      <div class="card-title" style="margin-bottom:0">Sayım Listesi</div>
+      <div class="list-actions">
+        <button class="btn btn-outline btn-sm" id="btn-csv">CSV İndir</button>
+        <button class="btn btn-red btn-sm" id="btn-reset">Sıfırla</button>
+      </div>
+    </div>
+
+    <div id="empty-state">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <path d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 013.75 9.375v-4.5zM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 01-1.125-1.125v-4.5zM13.5 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0113.5 9.375v-4.5z"/>
+      </svg>
+      Henüz tarama yapılmadı
+    </div>
+
+    <div id="table-wrap" style="display:none; overflow-x:auto;">
+      <table>
+        <thead>
+          <tr>
+            <th>Barkod</th>
+            <th style="text-align:center">Adet</th>
+            <th style="text-align:center">Sil</th>
+          </tr>
+        </thead>
+        <tbody id="table-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+</main>
+
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script>
+  // ── SUPABASE ──────────────────────────────────────────────────────────────
+  const SUPABASE_URL = 'https://pjuuwfvalnkboptpkori.supabase.co';
+  const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBqdXV3ZnZhbG5rYm9wdHBrb3JpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3MDcwMTEsImV4cCI6MjA5NTI4MzAxMX0.jT-IxPlEGbLO20CKY-smUUEKrbYEn1aIM8uKdFMPDqs';
+  let supabase = null;
+  try {
+    const _sb = window.supabase || window.supabaseJs;
+    if (_sb && _sb.createClient) {
+      supabase = _sb.createClient(SUPABASE_URL, SUPABASE_KEY);
+    }
+  } catch(e) { console.error('Supabase init hatası:', e); }
+
+  // ── STATE ─────────────────────────────────────────────────────────────────
+  let counts = {};
+  let currentSessionId = null;
+  let cameraActive = false;
+  let html5QrCode = null;
+  let lastScanned = '';
+  let lastScannedAt = 0;
+  const DEBOUNCE_MS = 2000;
+
+  // ── HELPERS ───────────────────────────────────────────────────────────────
+  function todayISO() {
+    return new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+  }
+
+  function formatDateLabel(isoDate) {
+    // "2026-05-24" -> "24.05.2026"
+    const [y, m, d] = isoDate.split('-');
+    return `${d}.${m}.${y}`;
+  }
+
+  function todayLabel() {
+    return formatDateLabel(todayISO());
+  }
+
+  function showLoading() {
+    document.getElementById('loading-overlay').classList.remove('hidden');
+  }
+
+  function hideLoading() {
+    document.getElementById('loading-overlay').classList.add('hidden');
+  }
+
+  // ── HTTPS CHECK ───────────────────────────────────────────────────────────
+  const isSecure = location.protocol === 'https:' ||
+                   location.hostname === 'localhost' ||
+                   location.hostname === '127.0.0.1';
+  if (!isSecure) {
+    document.getElementById('https-warning').style.display = 'block';
+    const startBtn = document.getElementById('btn-start-camera');
+    startBtn.disabled = true;
+    startBtn.style.opacity = '0.5';
+  }
+
+  // ── SESSION MANAGEMENT ────────────────────────────────────────────────────
+  async function initSession() {
+    // Check if we have a stored session id and it's for today
+    const storedId   = localStorage.getItem('currentSessionId');
+    const storedDate = localStorage.getItem('currentSessionDate');
+    const today      = todayISO();
+
+    if (storedId && storedDate === today) {
+      // Verify it still exists in DB
+      const { data } = await supabase
+        .from('sessions')
+        .select('id')
+        .eq('id', storedId)
+        .single();
+
+      if (data) {
+        currentSessionId = storedId;
+        return;
+      }
+    }
+
+    // Look for an existing session for today
+    const { data: existing } = await supabase
+      .from('sessions')
+      .select('id')
+      .eq('date', today)
+      .single();
+
+    if (existing) {
+      currentSessionId = existing.id;
+    } else {
+      // Create new session for today
+      const { data: created, error } = await supabase
+        .from('sessions')
+        .insert({ date: today, label: todayLabel() })
+        .select('id')
+        .single();
+
+      if (error) {
+        showToast('Oturum oluşturulamadı: ' + error.message);
+        return;
+      }
+      currentSessionId = created.id;
+    }
+
+    localStorage.setItem('currentSessionId', currentSessionId);
+    localStorage.setItem('currentSessionDate', today);
+  }
+
+  async function loadSession(sessionId, label) {
+    showLoading();
+    counts = {};
+    currentSessionId = sessionId;
+    localStorage.setItem('currentSessionId', sessionId);
+    localStorage.setItem('currentSessionDate', ''); // force re-check on next load
+
+    document.getElementById('session-date-label').textContent = label;
+
+    await loadScans();
+    renderTable();
+    updateSummary();
+    setupRealtime();
+    hideLoading();
+    closeHistoryDropdown();
+  }
+
+  // ── LOAD SCANS FROM SUPABASE ──────────────────────────────────────────────
+  async function loadScans() {
+    if (!currentSessionId) return;
+    const { data, error } = await supabase
+      .from('scans')
+      .select('barcode, count')
+      .eq('session_id', currentSessionId);
+
+    if (error) {
+      showToast('Veriler yüklenemedi: ' + error.message);
+      return;
+    }
+
+    counts = {};
+    if (data) {
+      data.forEach(row => { counts[row.barcode] = row.count; });
+    }
+  }
+
+  // ── REALTIME SYNC ─────────────────────────────────────────────────────────
+  let realtimeChannel = null;
+
+  function setupRealtime() {
+    if (realtimeChannel) {
+      supabase.removeChannel(realtimeChannel);
+      realtimeChannel = null;
+    }
+
+    if (!currentSessionId) return;
+
+    realtimeChannel = supabase.channel('scans-changes-' + currentSessionId)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'scans',
+        filter: `session_id=eq.${currentSessionId}`
+      }, (payload) => {
+        if (payload.eventType === 'INSERT') {
+          counts[payload.new.barcode] = payload.new.count;
+        } else if (payload.eventType === 'UPDATE') {
+          counts[payload.new.barcode] = payload.new.count;
+        } else if (payload.eventType === 'DELETE') {
+          delete counts[payload.old.barcode];
+        }
+        renderTable();
+        updateSummary();
+      })
+      .subscribe();
+  }
+
+  // ── ADD BARCODE ───────────────────────────────────────────────────────────
+  async function addBarcode(barcode, source) {
+    barcode = barcode.trim();
+    if (!barcode) return;
+
+    if (source === 'camera') {
+      const now = Date.now();
+      if (barcode === lastScanned && now - lastScannedAt < DEBOUNCE_MS) return;
+      lastScanned = barcode;
+      lastScannedAt = now;
+      document.getElementById('last-scan').textContent = barcode;
+    }
+
+    if (!currentSessionId) {
+      showToast('Oturum hazır değil');
+      return;
+    }
+
+    // Optimistic UI update
+    counts[barcode] = (counts[barcode] || 0) + 1;
+    renderTable();
+    updateSummary();
+    flashRow(barcode);
+    showToast(source === 'manual' ? 'Eklendi: ' + barcode : 'Tarandı: ' + barcode);
+
+    try {
+      // Check existing
+      const { data: existing } = await supabase
+        .from('scans')
+        .select('id, count')
+        .eq('session_id', currentSessionId)
+        .eq('barcode', barcode)
+        .single();
+
+      if (existing) {
+        const { error } = await supabase
+          .from('scans')
+          .update({ count: existing.count + 1, updated_at: new Date().toISOString() })
+          .eq('id', existing.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('scans')
+          .insert({ session_id: currentSessionId, barcode, count: 1 });
+        if (error) throw error;
+      }
+    } catch (err) {
+      showToast('Kayıt hatası: ' + err.message);
+      // Rollback optimistic update
+      counts[barcode]--;
+      if (counts[barcode] <= 0) delete counts[barcode];
+      renderTable();
+      updateSummary();
+    }
+  }
+
+  // ── DOM HELPERS ───────────────────────────────────────────────────────────
+  function makeBtn(text, classes) {
+    const btn = document.createElement('button');
+    btn.textContent = text;
+    btn.className = classes;
+    return btn;
+  }
+
+  // ── RENDER TABLE ──────────────────────────────────────────────────────────
+  function renderTable() {
+    const tbody = document.getElementById('table-body');
+    const empty = document.getElementById('empty-state');
+    const wrap  = document.getElementById('table-wrap');
+    const keys  = Object.keys(counts);
+
+    if (keys.length === 0) {
+      empty.style.display = 'block';
+      wrap.style.display = 'none';
+      tbody.textContent = '';
+      return;
+    }
+
+    empty.style.display = 'none';
+    wrap.style.display = 'block';
+    tbody.textContent = '';
+
+    [...keys].reverse().forEach(barcode => {
+      const tr = document.createElement('tr');
+      tr.dataset.barcode = barcode;
+
+      // Barcode cell
+      const tdBarcode = document.createElement('td');
+      tdBarcode.className = 'barcode-cell';
+      tdBarcode.title = barcode;
+      tdBarcode.textContent = barcode;
+
+      // Count cell
+      const tdCount = document.createElement('td');
+      tdCount.className = 'count-cell';
+
+      const controls = document.createElement('div');
+      controls.className = 'count-controls';
+
+      const btnDec = makeBtn('−', 'btn btn-icon btn-outline');
+      btnDec.setAttribute('aria-label', 'Azalt');
+      btnDec.addEventListener('click', () => adjustCount(barcode, -1));
+
+      const countSpan = document.createElement('input');
+      countSpan.type = 'number';
+      countSpan.className = 'count-value';
+      countSpan.value = String(counts[barcode]);
+      countSpan.min = '0';
+      countSpan.addEventListener('change', async () => {
+        const newVal = parseInt(countSpan.value, 10);
+        if (isNaN(newVal) || newVal < 0) { countSpan.value = String(counts[barcode]); return; }
+        const delta = newVal - counts[barcode];
+        if (delta !== 0) await adjustCount(barcode, delta);
+      });
+      countSpan.addEventListener('click', () => countSpan.select());
+
+      const btnInc = makeBtn('+', 'btn btn-icon btn-green');
+      btnInc.setAttribute('aria-label', 'Artır');
+      btnInc.addEventListener('click', () => adjustCount(barcode, +1));
+
+      controls.appendChild(btnDec);
+      controls.appendChild(countSpan);
+      controls.appendChild(btnInc);
+      tdCount.appendChild(controls);
+
+      // Delete cell
+      const tdDel = document.createElement('td');
+      tdDel.className = 'actions-cell';
+
+      const btnDel = document.createElement('button');
+      btnDel.className = 'btn-delete';
+      btnDel.setAttribute('aria-label', 'Sil');
+      btnDel.textContent = '×';
+      btnDel.addEventListener('click', () => deleteBarcode(barcode));
+      tdDel.appendChild(btnDel);
+
+      tr.appendChild(tdBarcode);
+      tr.appendChild(tdCount);
+      tr.appendChild(tdDel);
+      tbody.appendChild(tr);
+    });
+  }
+
+  function updateSummary() {
+    const keys = Object.keys(counts);
+    document.getElementById('total-products').textContent = String(keys.length);
+    document.getElementById('total-qty').textContent = String(keys.reduce((s, k) => s + counts[k], 0));
+  }
+
+  // ── COUNT ADJUST (+ / -) ──────────────────────────────────────────────────
+  async function adjustCount(barcode, delta) {
+    if (!counts[barcode]) return;
+
+    const newCount = counts[barcode] + delta;
+
+    // Optimistic update
+    if (newCount <= 0) {
+      delete counts[barcode];
+    } else {
+      counts[barcode] = newCount;
+    }
+    renderTable();
+    updateSummary();
+
+    try {
+      if (newCount <= 0) {
+        // Delete from DB
+        const { error } = await supabase
+          .from('scans')
+          .delete()
+          .eq('session_id', currentSessionId)
+          .eq('barcode', barcode);
+        if (error) throw error;
+      } else {
+        // Update in DB
+        const { error } = await supabase
+          .from('scans')
+          .update({ count: newCount, updated_at: new Date().toISOString() })
+          .eq('session_id', currentSessionId)
+          .eq('barcode', barcode);
+        if (error) throw error;
+      }
+    } catch (err) {
+      showToast('Güncelleme hatası: ' + err.message);
+      // Rollback
+      if (newCount <= 0) {
+        counts[barcode] = 1;
+      } else {
+        counts[barcode] = newCount - delta;
+        if (counts[barcode] <= 0) delete counts[barcode];
+      }
+      renderTable();
+      updateSummary();
+    }
+  }
+
+  // ── DELETE BARCODE ────────────────────────────────────────────────────────
+  async function deleteBarcode(barcode) {
+    // Optimistic
+    const backup = counts[barcode];
+    delete counts[barcode];
+    renderTable();
+    updateSummary();
+
+    try {
+      const { error } = await supabase
+        .from('scans')
+        .delete()
+        .eq('session_id', currentSessionId)
+        .eq('barcode', barcode);
+      if (error) throw error;
+    } catch (err) {
+      showToast('Silme hatası: ' + err.message);
+      counts[barcode] = backup;
+      renderTable();
+      updateSummary();
+    }
+  }
+
+  // ── FLASH ─────────────────────────────────────────────────────────────────
+  function flashRow(barcode) {
+    const el = document.getElementById('flash');
+    el.classList.add('show');
+    setTimeout(() => el.classList.remove('show'), 200);
+
+    const rows = document.querySelectorAll('#table-body tr');
+    rows.forEach(tr => {
+      if (tr.dataset.barcode === barcode) {
+        tr.classList.add('flash-row');
+        setTimeout(() => tr.classList.remove('flash-row'), 600);
+      }
+    });
+  }
+
+  // ── TOAST ─────────────────────────────────────────────────────────────────
+  let toastTimer;
+  function showToast(msg) {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove('show'), 2000);
+  }
+
+  // ── HISTORY DROPDOWN ──────────────────────────────────────────────────────
+  async function openHistoryDropdown() {
+    const dropdown = document.getElementById('history-dropdown');
+    const overlay  = document.getElementById('history-overlay');
+    const listEl   = document.getElementById('history-list');
+
+    listEl.innerHTML = '<div class="history-empty">Yükleniyor...</div>';
+    dropdown.classList.add('open');
+    overlay.classList.add('open');
+
+    // Fetch last 7 days of sessions
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    const fromDate = sevenDaysAgo.toISOString().slice(0, 10);
+
+    const { data, error } = await supabase
+      .from('sessions')
+      .select('id, date, label')
+      .gte('date', fromDate)
+      .order('date', { ascending: false });
+
+    if (error) {
+      listEl.innerHTML = '<div class="history-empty">Yüklenemedi</div>';
+      return;
+    }
+
+    if (!data || data.length === 0) {
+      listEl.innerHTML = '<div class="history-empty">Geçmiş oturum yok</div>';
+      return;
+    }
+
+    listEl.innerHTML = '';
+    data.forEach(session => {
+      const item = document.createElement('div');
+      item.className = 'history-item' + (session.id === currentSessionId ? ' active' : '');
+
+      const label = document.createElement('span');
+      label.className = 'hi-label';
+      label.textContent = session.label || formatDateLabel(session.date);
+
+      item.appendChild(label);
+      item.addEventListener('click', () => {
+        loadSession(session.id, session.label || formatDateLabel(session.date));
+      });
+      listEl.appendChild(item);
+    });
+  }
+
+  function closeHistoryDropdown() {
+    document.getElementById('history-dropdown').classList.remove('open');
+    document.getElementById('history-overlay').classList.remove('open');
+  }
+
+  document.getElementById('btn-history').addEventListener('click', openHistoryDropdown);
+  document.getElementById('history-overlay').addEventListener('click', closeHistoryDropdown);
+
+  // ── CAMERA ────────────────────────────────────────────────────────────────
+  async function startCamera() {
+    if (!isSecure) return;
+    if (cameraActive) return;
+
+    html5QrCode = new Html5Qrcode('reader');
+
+    const config = {
+      fps: 10,
+      qrbox: { width: 250, height: 150 },
+      formatsToSupport: [
+        Html5QrcodeSupportedFormats.EAN_13,
+        Html5QrcodeSupportedFormats.EAN_8,
+        Html5QrcodeSupportedFormats.CODE_128,
+        Html5QrcodeSupportedFormats.CODE_39,
+        Html5QrcodeSupportedFormats.UPC_A,
+        Html5QrcodeSupportedFormats.UPC_E,
+        Html5QrcodeSupportedFormats.QR_CODE,
+      ]
+    };
+
+    try {
+      await html5QrCode.start(
+        { facingMode: 'environment' },
+        config,
+        (decodedText) => { addBarcode(decodedText, 'camera'); }
+      );
+      cameraActive = true;
+      document.getElementById('btn-start-camera').style.display = 'none';
+      document.getElementById('btn-stop-camera').style.display  = '';
+    } catch (e) {
+      console.error(e);
+      showToast('Kamera başlatılamadı veya erişim reddedildi');
+      html5QrCode = null;
+    }
+  }
+
+  async function stopCamera() {
+    if (html5QrCode && cameraActive) {
+      try { await html5QrCode.stop(); } catch (e) { console.warn(e); }
+      html5QrCode.clear();
+      html5QrCode = null;
+    }
+    cameraActive = false;
+    document.getElementById('btn-start-camera').style.display = '';
+    document.getElementById('btn-stop-camera').style.display  = 'none';
+    document.getElementById('last-scan').textContent = '';
+  }
+
+  document.getElementById('btn-start-camera').addEventListener('click', startCamera);
+  document.getElementById('btn-stop-camera').addEventListener('click', stopCamera);
+
+  // ── USB / MANUAL INPUT ────────────────────────────────────────────────────
+  const manualInput  = document.getElementById('manual-input');
+  const btnAddManual = document.getElementById('btn-add-manual');
+
+  let usbBuffer = '';
+  let usbTimer  = null;
+
+  document.addEventListener('keydown', (e) => {
+    if (document.activeElement === manualInput) return;
+
+    if (e.key === 'Enter') {
+      if (usbBuffer.length > 0) {
+        addBarcode(usbBuffer, 'usb');
+        usbBuffer = '';
+        clearTimeout(usbTimer);
+      }
+      return;
+    }
+
+    if (e.key.length === 1) {
+      usbBuffer += e.key;
+      clearTimeout(usbTimer);
+      usbTimer = setTimeout(() => {
+        if (usbBuffer.length >= 4) addBarcode(usbBuffer, 'usb');
+        usbBuffer = '';
+      }, 100);
+    }
+  });
+
+  btnAddManual.addEventListener('click', () => {
+    const val = manualInput.value.trim();
+    if (val) { addBarcode(val, 'manual'); manualInput.value = ''; }
+    manualInput.focus();
+  });
+
+  manualInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') btnAddManual.click();
+  });
+
+  // ── RESET ─────────────────────────────────────────────────────────────────
+  document.getElementById('btn-reset').addEventListener('click', async () => {
+    if (Object.keys(counts).length === 0) { showToast('Liste zaten boş'); return; }
+    if (!confirm('Tüm sayım verileri silinecek. Emin misiniz?')) return;
+
+    const backup = { ...counts };
+    counts = {};
+    renderTable();
+    updateSummary();
+    document.getElementById('last-scan').textContent = '';
+
+    try {
+      const { error } = await supabase
+        .from('scans')
+        .delete()
+        .eq('session_id', currentSessionId);
+      if (error) throw error;
+      showToast('Sayım sıfırlandı');
+    } catch (err) {
+      showToast('Sıfırlama hatası: ' + err.message);
+      counts = backup;
+      renderTable();
+      updateSummary();
+    }
+  });
+
+  // ── CSV EXPORT ────────────────────────────────────────────────────────────
+  document.getElementById('btn-csv').addEventListener('click', () => {
+    const keys = Object.keys(counts);
+    if (keys.length === 0) { showToast('İndirilecek veri yok'); return; }
+
+    const rows = ['barkod,adet', ...keys.map(k => k + ',' + counts[k])];
+    const csv  = rows.join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    const date = new Date().toISOString().slice(0, 10);
+    a.href     = url;
+    a.download = 'stok-sayim-' + date + '.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('CSV indirildi');
+  });
+
+  // ── INIT ──────────────────────────────────────────────────────────────────
+  async function init() {
+    showLoading();
+
+    if (!supabase) {
+      showToast('Supabase bağlanamadı: ' + (window.supabase ? 'client oluşturulamadı' : 'CDN yüklenmedi'));
+      return;
+    }
+
+    try {
+      await Promise.race([
+        initSession(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Bağlantı zaman aşımı')), 10000))
+      ]);
+      document.getElementById('session-date-label').textContent = todayLabel();
+      await loadScans();
+      renderTable();
+      updateSummary();
+      setupRealtime();
+    } catch (err) {
+      showToast('Hata: ' + (err.message || 'Bilinmeyen hata'));
+    } finally {
+      hideLoading();
+      manualInput.focus();
+    }
+  }
+
+  init();
+</script>
+<script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js');
+  }
+</script>
+</body>
+</html>
