@@ -140,6 +140,20 @@
     .history-item:hover { background: var(--gray-50); }
     .history-item.active { background: #eff6ff; color: #1d4ed8; font-weight: 600; }
 
+    .btn-csv-hist {
+      font-size: 11px;
+      padding: 3px 8px;
+      min-height: 26px;
+      border-radius: 5px;
+      background: transparent;
+      border: 1px solid var(--navy);
+      color: var(--navy);
+      cursor: pointer;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .btn-csv-hist:hover { background: var(--navy); color: var(--white); }
+
     .history-item .hi-label { font-weight: 600; }
     .history-item .hi-meta { font-size: 11px; color: var(--gray-400); }
 
@@ -1039,7 +1053,37 @@
       label.className = 'hi-label';
       label.textContent = session.label || formatDateLabel(session.date);
 
+      const csvBtn = document.createElement('button');
+      csvBtn.className = 'btn-csv-hist';
+      csvBtn.textContent = '⬇ CSV';
+      csvBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        showToast('İndiriliyor...');
+        const { data: scans, error } = await supabase
+          .from('scans')
+          .select('barcode, count')
+          .eq('session_id', session.id);
+        if (error || !scans || scans.length === 0) {
+          showToast('Bu oturumda veri yok');
+          return;
+        }
+        const csvRows = ['barkod,adet', ...scans.map(s => `${s.barcode},${s.count}`)];
+        const csvContent = csvRows.join('\n');
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const sessionLabel = (session.label || formatDateLabel(session.date)).replace(/\s+/g, '-');
+        const sessionDate = (session.date || '').replace(/\s+/g, '-');
+        const filename = `stok-sayim-${sessionDate}-${sessionLabel}.csv`;
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast('CSV indirildi');
+      });
+
       item.appendChild(label);
+      item.appendChild(csvBtn);
       item.addEventListener('click', () => {
         loadSession(session.id, session.label || formatDateLabel(session.date));
       });
