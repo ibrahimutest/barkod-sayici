@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#14213a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Sayım">
+<title>Barkod Sayıcı</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon-192.png">
+<link rel="apple-touch-icon" href="/icon-192.png">
+<link rel="stylesheet" href="/app.css?v=6">
+</head>
+<body>
+<div id="app">
+
+  <!-- ============ ANA SAYFA ============ -->
+  <section id="v-home" class="view" hidden>
+    <div class="home-wrap">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+        <h1>Barkod Sayıcı</h1>
+        <p class="muted">Ortak, canlı stok sayımı. Her okutma kayıt altında.</p>
+      </div>
+
+      <div id="home-devam" class="card" hidden>
+        <h2 class="card-t">Bu cihazdaki sayımlar</h2>
+        <div id="home-list"></div>
+      </div>
+
+      <div class="card">
+        <h2 class="card-t">Yeni sayım başlat</h2>
+        <form id="f-create" autocomplete="off" novalidate>
+          <label class="fld"><span>Sayım adı</span><input name="ad" maxlength="80" placeholder="Örn. Merkez Market devir sayımı" required></label>
+          <div class="row2">
+            <label class="fld"><span>Sayım PIN'i (4-12 rakam)</span><input name="pin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="12" required></label>
+            <label class="fld"><span>PIN tekrar</span><input name="pin2" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="12" required></label>
+          </div>
+          <label class="fld"><span>Adınız (kayıtlarda görünür)</span><input name="kisi" maxlength="40" placeholder="Örn. Emre" required></label>
+          <p class="err" data-err></p>
+          <button class="btn primary big" type="submit">Sayımı oluştur</button>
+        </form>
+      </div>
+
+      <div class="card">
+        <h2 class="card-t">Kodla katıl</h2>
+        <form id="f-kod" autocomplete="off" novalidate>
+          <label class="fld"><span>Sayım kodu (12 karakter)</span><input name="kod" maxlength="16" autocapitalize="off" spellcheck="false" placeholder="abcd-ef12-3456"></label>
+          <p class="err" data-err></p>
+          <button class="btn big" type="submit">Devam</button>
+        </form>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ KATIL ============ -->
+  <section id="v-join" class="view" hidden>
+    <div class="home-wrap">
+      <a href="#" class="back">‹ Ana sayfa</a>
+      <div class="card">
+        <p class="muted small">Sayıma katıl</p>
+        <h2 class="join-t" id="join-ad">—</h2>
+        <p class="muted small" id="join-durum"></p>
+        <form id="f-join" autocomplete="off" novalidate>
+          <label class="fld"><span>Sayım PIN'i</span><input name="pin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="12" required></label>
+          <label class="fld"><span>Adınız (kayıtlarda görünür)</span><input name="kisi" maxlength="40" required></label>
+          <p class="err" data-err></p>
+          <button class="btn primary big" type="submit">Katıl</button>
+        </form>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ SAYIM (yazma) / İZLEME ============ -->
+  <section id="v-sayim" class="view" hidden>
+    <header class="top">
+      <div class="top-l">
+        <div class="top-ad" id="s-ad">—</div>
+        <div class="top-sub"><span id="s-rol"></span><span id="s-kisi"></span></div>
+      </div>
+      <button class="sync" id="sync" type="button" aria-live="polite"><i class="dot"></i><span id="sync-t">—</span></button>
+    </header>
+    <div class="banner" id="banner" hidden></div>
+
+    <main class="pane" id="p-okut">
+      <div class="okut-top">
+        <button class="chip-btn" id="btn-bolge" type="button"><span class="k">Raf / bölge</span><span class="v" id="bolge-v">—</span></button>
+        <label class="switch" title="Her okutma 1 adet, sormadan eklenir">
+          <input type="checkbox" id="hizli"><span class="sw"></span><span class="sw-t">Hızlı mod<small>okut = +1</small></span>
+        </label>
+      </div>
+
+      <div class="cam-box" id="cam-box">
+        <div id="reader"></div>
+        <div class="cam-off" id="cam-off">
+          <button class="btn primary big" id="btn-cam" type="button">Kamerayı aç</button>
+          <p class="muted small">USB / Bluetooth okuyucu kamera kapalıyken de çalışır.</p>
+        </div>
+        <button class="cam-stop" id="btn-cam-stop" type="button" hidden>Kamerayı kapat</button>
+        <div class="flash" id="flash"></div>
+      </div>
+
+      <!-- son okutulan / bekleyen ürün -->
+      <div class="scan-card" id="scan-card" hidden>
+        <div class="sc-code" id="sc-code">—</div>
+        <div class="sc-meta" id="sc-meta"></div>
+        <div class="sc-pending" id="sc-pending" hidden>
+          <div class="qty">
+            <button class="qbtn" type="button" data-q="-1" aria-label="Azalt">−</button>
+            <input id="sc-miktar" class="qin" inputmode="decimal" value="1" aria-label="Miktar" autocomplete="off">
+            <button class="qbtn" type="button" data-q="1" aria-label="Arttır">+</button>
+          </div>
+          <div class="seg" id="sc-birim" role="radiogroup">
+            <button type="button" data-b="adet" class="on">adet</button><button type="button" data-b="kg">kg</button>
+          </div>
+          <div class="sc-act">
+            <button class="btn" type="button" id="sc-vazgec">Vazgeç</button>
+            <button class="btn primary" type="button" id="sc-ekle">Ekle</button>
+          </div>
+          <button class="link small" type="button" id="sc-isaret">± Düzeltme (eksi miktar)</button>
+        </div>
+        <div class="sc-fast" id="sc-fast" hidden>
+          <button class="btn" type="button" id="sc-tekrar">+1 aynısından</button>
+          <button class="btn ghost-red" type="button" id="sc-geri">Geri al</button>
+        </div>
+      </div>
+
+      <form class="manual" id="f-manual" autocomplete="off" novalidate>
+        <input id="manual-in" inputmode="numeric" placeholder="Barkodu elle yaz / okuyucu" aria-label="Barkod" maxlength="64" spellcheck="false" autocapitalize="off">
+        <button class="btn" type="submit">Getir</button>
+      </form>
+      <button class="btn big outline" type="button" id="btn-elle">+ Barkodsuz ürün ekle (ad + miktar)</button>
+
+      <div class="recent">
+        <div class="recent-h"><span>Son kayıtlarım</span></div>
+        <div id="recent-list"><p class="muted small empty">Henüz kayıt yok.</p></div>
+      </div>
+    </main>
+
+    <main class="pane" id="p-liste" hidden>
+      <div class="stats" id="stats">
+        <div><b id="st-kalem">0</b><span>kalem</span></div>
+        <div><b id="st-adet">0</b><span>adet</span></div>
+        <div><b id="st-kg">0</b><span>kg</span></div>
+        <div><b id="st-okutma">0</b><span>okutma</span></div>
+      </div>
+      <div class="search"><input id="ara" type="search" placeholder="Barkod veya ad ara" aria-label="Ara" autocomplete="off" spellcheck="false"></div>
+      <div id="liste"></div>
+      <p class="muted small center" id="liste-not"></p>
+    </main>
+
+    <main class="pane" id="p-menu" hidden>
+      <div class="card" id="m-paylas">
+        <h2 class="card-t">Sayıcı davet et</h2>
+        <p class="muted small">Linki gönderin, PIN'i <b>ayrıca</b> sözlü söyleyin.</p>
+        <div class="kod" id="m-kod">—</div>
+        <div class="row2">
+          <button class="btn" type="button" data-share="davet">Paylaş</button>
+          <button class="btn" type="button" data-copy="davet">Kopyala</button>
+        </div>
+      </div>
+      <div class="card" id="m-izle">
+        <h2 class="card-t">Market sahibi — canlı izleme</h2>
+        <p class="muted small">Bu link ile liste canlı görülür, <b>değiştirilemez</b>. PIN gerekmez; yalnız güvendiğiniz kişiye verin.</p>
+        <div class="row2">
+          <button class="btn" type="button" data-share="izle">Paylaş</button>
+          <button class="btn" type="button" data-copy="izle">Kopyala</button>
+        </div>
+      </div>
+      <div class="card">
+        <h2 class="card-t">Excel'e aktar (CSV)</h2>
+        <p class="muted small">Özet: barkod başına toplam. Detay: her okutma ayrı satır (iptaller dahil).</p>
+        <div class="row2">
+          <button class="btn" type="button" data-csv="ozet">Özet CSV</button>
+          <button class="btn" type="button" data-csv="detay">Detay CSV</button>
+        </div>
+        <p class="muted small" id="m-csv-not"></p>
+      </div>
+      <div class="card" id="m-yonet">
+        <h2 class="card-t">Sayım durumu: <span id="m-durum">—</span></h2>
+        <p class="muted small" id="m-durum-not">Kapatılan sayıma yeni kayıt girilemez. PIN ile yeniden açılabilir.</p>
+        <button class="btn big danger" type="button" id="btn-kapat">Sayımı kapat</button>
+        <button class="btn big" type="button" id="btn-ac" hidden>Sayımı yeniden aç</button>
+      </div>
+      <div class="card" id="m-cihaz">
+        <h2 class="card-t">Bu cihaz</h2>
+        <p class="small">Kayıtlarda adınız: <b id="m-kisi">—</b></p>
+        <div class="row2">
+          <button class="btn" type="button" id="btn-kisi">Adı değiştir</button>
+          <button class="btn" type="button" id="btn-cik">Sayımdan çık</button>
+        </div>
+        <p class="muted small" id="m-ver"></p>
+      </div>
+    </main>
+
+    <nav class="tabs" id="tabs">
+      <button type="button" data-tab="okut" class="on" id="tab-okut"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7V4h3M18 4h3v3M21 17v3h-3M6 20H3v-3M7 8v8M10 8v8M13 8v8M16 8v8"/></svg>Okut</button>
+      <button type="button" data-tab="liste" id="tab-liste"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>Liste</button>
+      <button type="button" data-tab="menu" id="tab-menu"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>Paylaş / Aktar</button>
+    </nav>
+  </section>
+
+</div>
+
+<!-- ============ ALT SAYFALAR (sheet) ============ -->
+<div class="sheet-bg" id="sheet-bg" hidden></div>
+
+<div class="sheet" id="sh-elle" hidden role="dialog" aria-label="Barkodsuz ürün">
+  <div class="sh-h"><b>Barkodsuz ürün</b><button class="x" type="button" data-close aria-label="Kapat">×</button></div>
+  <form id="f-elle" autocomplete="off" novalidate>
+    <label class="fld"><span>Ürün adı</span><input name="ad" maxlength="120" list="dl-adlar" placeholder="Örn. Domates" required></label>
+    <datalist id="dl-adlar"></datalist>
+    <div class="row2">
+      <label class="fld"><span>Miktar</span><input name="miktar" inputmode="decimal" value="1" required></label>
+      <div class="fld"><span>Birim</span><div class="seg" id="elle-birim"><button type="button" data-b="adet" class="on">adet</button><button type="button" data-b="kg">kg</button></div></div>
+    </div>
+    <p class="muted small">Eksi miktar (örn. -2) düzeltme olarak düşer. Raf: <b data-bolge>—</b></p>
+    <p class="err" data-err></p>
+    <button class="btn primary big" type="submit">Ekle</button>
+  </form>
+</div>
+
+<div class="sheet" id="sh-bolge" hidden role="dialog" aria-label="Raf / bölge">
+  <div class="sh-h"><b>Raf / bölge</b><button class="x" type="button" data-close aria-label="Kapat">×</button></div>
+  <form id="f-bolge" autocomplete="off" novalidate>
+    <label class="fld"><span>Şu an saydığınız yer (isteğe bağlı)</span><input name="bolge" maxlength="60" placeholder="Örn. Reyon 3, Depo, Kasa önü"></label>
+    <div class="chips" id="bolge-chips"></div>
+    <div class="row2">
+      <button class="btn" type="button" id="bolge-temizle">Bölgesiz</button>
+      <button class="btn primary" type="submit">Kaydet</button>
+    </div>
+  </form>
+</div>
+
+<div class="sheet tall" id="sh-gecmis" hidden role="dialog" aria-label="Okutma geçmişi">
+  <div class="sh-h"><div><b id="g-t">—</b><div class="muted small" id="g-sub"></div></div><button class="x" type="button" data-close aria-label="Kapat">×</button></div>
+  <div class="g-list" id="g-list"></div>
+</div>
+
+<div class="sheet" id="sh-pin" hidden role="dialog" aria-label="PIN">
+  <div class="sh-h"><b id="pin-t">PIN</b><button class="x" type="button" data-close aria-label="Kapat">×</button></div>
+  <form id="f-pin" autocomplete="off" novalidate>
+    <p class="small" id="pin-msg"></p>
+    <label class="fld"><span>Sayım PIN'i</span><input name="pin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="12" required></label>
+    <p class="err" data-err></p>
+    <button class="btn primary big" type="submit" id="pin-ok">Onayla</button>
+  </form>
+</div>
+
+<div class="sheet" id="sh-kisi" hidden role="dialog" aria-label="Adınız">
+  <div class="sh-h"><b>Adınız</b><button class="x" type="button" data-close aria-label="Kapat">×</button></div>
+  <form id="f-kisi" autocomplete="off" novalidate>
+    <label class="fld"><span>Kayıtlarda görünecek ad</span><input name="kisi" maxlength="40" required></label>
+    <p class="err" data-err></p>
+    <button class="btn primary big" type="submit">Kaydet</button>
+  </form>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="/vendor/html5-qrcode-2.3.8.min.js" integrity="sha384-c9d8RFSL+u3exBOJ4Yp3HUJXS4znl9f+z66d1y54ig+ea249SpqR+w1wyvXz/lk+" defer></script>
+<script src="/app.js?v=6" defer></script>
+</body>
+</html>

@@ -1,0 +1,19 @@
+# Barkod Sayıcı v2 — TEK Worker: statik assets (public/) + /api/* (D1)
+# Deploy: /opt/homebrew/bin/wrangler deploy   ·   Şema: wrangler d1 execute barkod-sayici --remote --file=schema.sql
+name = "barkod-sayici"
+main = "src/worker.js"
+compatibility_date = "2025-06-01"
+workers_dev = true
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+run_worker_first = ["/api/*"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "barkod-sayici"
+database_id = "bf1a7ae1-a8b8-435b-81ea-544d4bb698ba"
+
+[observability]
+enabled = true
